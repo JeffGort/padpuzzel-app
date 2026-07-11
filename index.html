@@ -67,7 +67,6 @@ body {
   .panel .subtitle { margin-bottom: 0.5rem; }
   .field { margin-bottom: 0.55rem; }
   .btn-row { margin-top: 0.5rem; }
-  .instruction-box { margin-top: 0.5rem; }
 }
 @media (max-width: 480px) {
   .app { padding: 0.35rem; gap: 0.35rem; }
@@ -168,15 +167,6 @@ button.secondary {
   border: 1px solid var(--border);
 }
 button.secondary:hover { background: #f8f6f4; }
-.instruction-box {
-  margin-top: .75rem;
-  padding: .65rem .75rem;
-  background: #f8f6f4;
-  border-radius: 8px;
-  font-size: .9rem;
-  line-height: 1.4;
-  border-left: 3px solid var(--accent);
-}
 .preview-wrap {
   display: flex;
   flex-direction: column;
@@ -237,21 +227,12 @@ button.secondary:hover { background: #f8f6f4; }
     line-height: 1.35;
   }
 }
-.theme-labels {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  max-width: 480px;
-  font-size: .8rem;
-  color: var(--text-muted);
-  margin-top: .5rem;
-}
 .hidden { display: none !important; }
 
 @media print {
   html, body { height: auto; overflow: visible; }
   body { background: #fff; }
-  .panel, .btn-row, .theme-labels, .no-print { display: none !important; }
+  .panel, .btn-row, .no-print { display: none !important; }
   .app { display: block; padding: 0; max-width: none; height: auto; max-height: none; overflow: visible; }
   .preview-wrap, .preview-card, #svgHost { height: auto; overflow: visible; }
   .preview-card { border: none; box-shadow: none; padding: 0; }
@@ -340,8 +321,6 @@ button.secondary:hover { background: #f8f6f4; }
       <p class="color-hint" id="colorHint"></p>
     </div>
 
-    <div class="instruction-box" id="instructionPreview"></div>
-
     <div class="btn-row">
       <button id="btnNew">Nieuwe puzzel</button>
       <button class="secondary" id="btnPng">Download PNG</button>
@@ -354,10 +333,6 @@ button.secondary:hover { background: #f8f6f4; }
     <div class="preview-card" id="printArea">
       <p class="preview-instruction" id="instructionDisplay"></p>
       <div id="svgHost"></div>
-      <div class="theme-labels no-print">
-        <span id="startLabel">Start</span>
-        <span id="goalLabel">Doel</span>
-      </div>
     </div>
   </main>
 </div>
@@ -382,11 +357,11 @@ const DIFFICULTY_PRESETS = {
 const COLOR_UI = {
   singleColor: {
     label: 'Welke kleur moet het kind volgen?',
-    hint: 'Het juiste pad bestaat alleen uit deze kleur. Andere vakjes krijgen automatisch de overige kleuren.'
+    hint: 'Kies de kleur die het kind moet volgen.'
   },
   avoidColor: {
     label: 'Welke kleur mag NIET?',
-    hint: 'Het pad gebruikt alleen de andere kleuren. Op afleidingsvakjes komt ook de verboden kleur voor.'
+    hint: 'Kies de kleur die verboden is.'
   }
 };
 
@@ -446,16 +421,14 @@ function neighbors4(r, c, rows, cols) {
   return n;
 }
 
-function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
+function findBranchFreePathSimple(rows, cols, startCol, goalCol, rng) {
   const path = [[0, startCol]];
   let c = startCol;
-
   const topVia = rng.int(2) === 0 ? goalCol : rng.int(cols);
   while (c !== topVia) {
     c += c < topVia ? 1 : -1;
     path.push([0, c]);
   }
-
   if (rows === 2) {
     while (c !== goalCol) {
       c += c < goalCol ? 1 : -1;
@@ -464,11 +437,7 @@ function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
     path.push([rows - 1, goalCol]);
     return path;
   }
-
-  for (let r = 1; r < rows - 1; r++) {
-    path.push([r, topVia]);
-  }
-
+  for (let r = 1; r < rows - 1; r++) path.push([r, topVia]);
   c = topVia;
   const lastRow = rows - 2;
   while (c !== goalCol) {
@@ -477,6 +446,84 @@ function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
   }
   path.push([rows - 1, goalCol]);
   return path;
+}
+
+function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
+  const path = [[0, startCol]];
+  const usedInRow = Array.from({ length: rows }, () => new Set());
+  usedInRow[0].add(startCol);
+  let c = startCol;
+
+  function canVisit(row, col) {
+    if (col < 0 || col >= cols) return false;
+    if (usedInRow[row].has(col)) return false;
+    if (row > 0 && usedInRow[row - 1].has(col)) return false;
+    return true;
+  }
+
+  function step(row, col) {
+    path.push([row, col]);
+    usedInRow[row].add(col);
+    c = col;
+  }
+
+  function wanderRow(row, dirs, maxSteps) {
+    for (const dir of dirs) {
+      for (let i = 0; i < maxSteps; i++) {
+        const nc = c + dir;
+        if (!canVisit(row, nc)) break;
+        step(row, nc);
+      }
+    }
+  }
+
+  const topTargets = [];
+  for (let tc = 0; tc < cols; tc++) {
+    if (tc !== startCol) topTargets.push(tc);
+  }
+  const topTarget = topTargets.length ? rng.choice(topTargets) : startCol;
+  while (c !== topTarget) step(0, c < topTarget ? c + 1 : c - 1);
+
+  if (rows === 2) {
+    while (c !== goalCol) step(0, c < goalCol ? c + 1 : c - 1);
+    step(1, goalCol);
+    return path;
+  }
+
+  const windiness = Math.max(2, Math.floor(cols * (0.35 + rng.next() * 0.35)));
+
+  for (let row = 1; row < rows - 1; row++) {
+    step(row, c);
+
+    if (row === rows - 2) {
+      while (c !== goalCol) {
+        const nc = c < goalCol ? c + 1 : c - 1;
+        if (!canVisit(row, nc)) return null;
+        step(row, nc);
+      }
+      continue;
+    }
+
+    const towardGoal = row >= rows - 3;
+    const dirs = towardGoal
+      ? (c < goalCol ? [1, -1] : c > goalCol ? [-1, 1] : (rng.int(2) === 0 ? [-1, 1] : [1, -1]))
+      : (rng.int(2) === 0 ? [-1, 1] : [1, -1]);
+    wanderRow(row, dirs, rng.int(windiness) + 1);
+    if (!towardGoal && rng.next() < 0.55) {
+      wanderRow(row, dirs.map(d => -d), rng.int(windiness) + 1);
+    }
+  }
+
+  step(rows - 1, goalCol);
+  return path;
+}
+
+function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const path = findBranchFreePathWindy(rows, cols, startCol, goalCol, rng);
+    if (path && path.length >= rows) return path;
+  }
+  return findBranchFreePathSimple(rows, cols, startCol, goalCol, rng);
 }
 
 function dfsPath(rows, cols, rng) {
@@ -761,17 +808,6 @@ function drawGrid(puzzle, config) {
       const cy = margin + r * cellSize + cellSize / 2;
       const cell = puzzle.grid[r][c];
       drawer(g, cx, cy, s, cell.light, cell.dark);
-
-      if (r === 0 && c === puzzle.startCol) {
-        g.appendChild(el('circle', {
-          cx, cy: cy - cellSize * 0.38, r: 5, fill: '#7a9e7e', stroke: '#fff', 'stroke-width': 1.5
-        }));
-      }
-      if (r === rows - 1 && c === puzzle.endCol) {
-        g.appendChild(el('rect', {
-          x: cx - 6, y: cy + cellSize * 0.3, width: 12, height: 4, rx: 2, fill: '#c8a87a'
-        }));
-      }
     }
   }
 
@@ -823,13 +859,7 @@ function regenerate() {
   }
   currentPuzzle = puzzle;
 
-  const instruction = getInstruction(config);
-  document.getElementById('instructionDisplay').textContent = instruction;
-  document.getElementById('instructionPreview').textContent = instruction;
-
-  const theme = THEME_PACKS[config.themeId];
-  document.getElementById('startLabel').textContent = '▲ ' + theme.start;
-  document.getElementById('goalLabel').textContent = theme.goal + ' ▼';
+  document.getElementById('instructionDisplay').textContent = getInstruction(config);
 
   const host = document.getElementById('svgHost');
   host.innerHTML = '';
