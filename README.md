@@ -21,14 +21,18 @@ Ga naar http://localhost:8080
 - Regels: één kleur volgen, vermijd één kleur
 - Thema's: bloementuin, dierentuin, ruimte, onder water, sprookje, seizoenen
 - Iconen: bloem, bal, hart, wiel
-- Download PNG, print
+- Download PNG, PDF, print
 - DFS-padgeneratie (geen vertakkingen)
 
 ## Tests
 
+**Node** (als geïnstalleerd):
+
 ```powershell
 node --test test_maze.js
 ```
+
+**Browser QA:** open `test_maze.html` in je browser (200 seeds × 3 moeilijkheden × 2 regels).
 
 ## GitHub Pages setup
 
@@ -46,4 +50,3 @@ node --test test_maze.js
 ## Roadmap (binnenkort)
 
 - Meerdere kleuren, afwisselen, vaste volgorde, vorm-regels
-- PDF-download
