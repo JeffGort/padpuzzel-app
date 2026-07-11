@@ -266,11 +266,9 @@ button.secondary:hover { background: #f8f6f4; }
       <label for="theme">Thema</label>
       <select id="theme">
         <option value="bloementuin">Bloementuin</option>
-        <option value="dierentuin">Dierentuin</option>
+        <option value="speeltuin">Speeltuin</option>
         <option value="ruimte">Ruimte</option>
-        <option value="onderwater">Onder water</option>
         <option value="sprookje">Sprookje</option>
-        <option value="seizoenen">Seizoenen</option>
       </select>
     </div>
 
@@ -344,14 +342,12 @@ const COLOR_LABELS = {
   avoidColor: 'Welke kleur mag NIET?'
 };
 
-/* defaultIcon: visueel icoon op het rooster (figure blijft voor instructietekst) */
+/* Elk thema heeft precies één icoon (1:1); figure voor instructietekst */
 const THEME_PACKS = {
-  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder', defaultIcon: 'flower' },   // tuin → bloem
-  dierentuin:  { start: 'Aap', goal: 'Bananenmand', figure: 'aap', defaultIcon: 'ball' },        // speelbal in dierentuin
-  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut', defaultIcon: 'wheel' }, // planeten / wiel
-  onderwater:  { start: 'Vis', goal: 'Koraalrif', figure: 'vis', defaultIcon: 'ball' },          // luchtbel, geen hart
-  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses', defaultIcon: 'heart' },  // sprookjesliefde
-  seizoenen:   { start: 'Eekhoorn', goal: 'Boom', figure: 'eekhoorn', defaultIcon: 'wheel' }      // jaarrond / seizoenscyclus
+  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder', defaultIcon: 'flower' },
+  speeltuin:   { start: 'Kind', goal: 'Glijbaan', figure: 'kind', defaultIcon: 'ball' },
+  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut', defaultIcon: 'wheel' },
+  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses', defaultIcon: 'heart' }
 };
 
 function iconForTheme(themeId) {
