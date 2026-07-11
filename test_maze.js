@@ -87,6 +87,25 @@ function straightRunLen(path) {
   return len;
 }
 
+function countTurns(path) {
+  if (path.length < 3) return 0;
+  let turns = 0;
+  for (let i = 2; i < path.length; i++) {
+    const dr1 = path[i - 1][0] - path[i - 2][0];
+    const dc1 = path[i - 1][1] - path[i - 2][1];
+    const dr2 = path[i][0] - path[i - 1][0];
+    const dc2 = path[i][1] - path[i - 1][1];
+    if (dr1 !== dr2 || dc1 !== dc2) turns++;
+  }
+  return turns;
+}
+
+function minTurnsForSize(rows) {
+  if (rows <= 6) return 4;
+  if (rows <= 9) return 8;
+  return 12;
+}
+
 function orderNeighborsForWindiness(path, neighbors, rng) {
   const [r, c] = path[path.length - 1];
   let pdr = 0;
@@ -95,25 +114,39 @@ function orderNeighborsForWindiness(path, neighbors, rng) {
     pdr = r - path[path.length - 2][0];
     pdc = c - path[path.length - 2][1];
   }
-  const preferTurn = straightRunLen(path) >= 2;
-  const turns = [];
-  const same = [];
-  const other = [];
-  for (const [nr, nc] of neighbors) {
+  const runLen = straightRunLen(path);
+  const horizRun = pdc !== 0;
+
+  const scored = neighbors.map(([nr, nc]) => {
     const dr = nr - r;
     const dc = nc - c;
     const isSame = dr === pdr && dc === pdc;
-    const isTurn = (pdr !== 0 || pdc !== 0) && !isSame;
-    if (preferTurn && isTurn) turns.push([nr, nc]);
-    else if (isSame) same.push([nr, nc]);
-    else other.push([nr, nc]);
-  }
-  return [...rng.shuffle(turns), ...rng.shuffle(other), ...rng.shuffle(same)];
+    const isUTurn = dr === -pdr && dc === -pdc;
+    const isPerp = !isSame && !isUTurn && (pdr !== 0 || pdc !== 0);
+
+    let score = rng.next() * 0.01;
+    if (path.length < 2) {
+      score += 10;
+    } else if (isPerp) {
+      score += runLen >= 2 ? 200 : (runLen >= 1 ? 130 : 55);
+    } else if (isSame) {
+      score -= runLen >= 2 ? 180 : (runLen >= 1 ? 90 : 15);
+      if (horizRun) score -= runLen * 30;
+    } else if (isUTurn) {
+      score += runLen >= 2 ? 25 : 5;
+    } else {
+      score += 35;
+    }
+    return { cell: [nr, nc], score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map(s => s.cell);
 }
 
 function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
   const goal = [rows - 1, goalCol];
-  const maxTotal = rows * cols * 2;
+  const maxTotal = rows * cols * 3;
 
   function tryWalk() {
     const path = [[0, startCol]];
@@ -128,7 +161,7 @@ function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
       if (r === goal[0] && c === goal[1] && path.length >= rows) return path;
 
       if (dir === null || stepsInDir >= maxStepsInDir) {
-        maxStepsInDir = rng.int(3) + 2;
+        maxStepsInDir = rng.int(2) + 1;
         stepsInDir = 0;
         dir = null;
       }
@@ -149,16 +182,18 @@ function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
         continue;
       }
 
+      const ordered = orderNeighborsForWindiness(path, candidates, rng);
+      const runLen = straightRunLen(path);
       let pick;
-      if (dir !== null) {
+
+      if (dir !== null && stepsInDir < maxStepsInDir && runLen < 2) {
         const [dr, dc] = dir;
         const cont = candidates.find(([nr, nc]) => nr - r === dr && nc - c === dc);
-        pick = cont && stepsInDir < maxStepsInDir
-          ? cont
-          : orderNeighborsForWindiness(path, candidates, rng)[0];
+        const best = ordered[0];
+        const bestIsCont = cont && best[0] - r === dr && best[1] - c === dc;
+        pick = bestIsCont ? cont : best;
       } else {
-        const ordered = orderNeighborsForWindiness(path, candidates, rng);
-        pick = ordered[rng.int(Math.min(3, ordered.length))];
+        pick = ordered[rng.int(Math.min(2, ordered.length))];
       }
 
       dir = [pick[0] - r, pick[1] - c];
@@ -169,14 +204,19 @@ function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
     return null;
   }
 
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 120; i++) {
     const result = tryWalk();
     if (result) return result;
   }
   return null;
 }
 
-function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
+function findBranchFreePath(rows, cols, startCol, goalCol, rng, minTurns) {
+  const minT = minTurns ?? minTurnsForSize(rows);
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const path = findBranchFreePathWindy(rows, cols, startCol, goalCol, rng);
+    if (path && path.length >= rows && countTurns(path) >= minT) return path;
+  }
   for (let attempt = 0; attempt < 24; attempt++) {
     const path = findBranchFreePathWindy(rows, cols, startCol, goalCol, rng);
     if (path && path.length >= rows) return path;
@@ -302,9 +342,9 @@ const DIST = ['groen', 'roze', 'blauw'].map(palettePair);
 const AVOID = palettePair('roze');
 
 const DIFFICULTIES = [
-  { rows: 6, cols: 7 },
-  { rows: 9, cols: 8 },
-  { rows: 11, cols: 12 }
+  { rows: 6, cols: 7, minTurns: 4 },
+  { rows: 9, cols: 8, minTurns: 8 },
+  { rows: 11, cols: 12, minTurns: 12 }
 ];
 
 describe('maze generator', () => {
@@ -325,12 +365,13 @@ describe('maze generator', () => {
   });
 
   for (const ruleId of ['singleColor', 'avoidColor']) {
-    for (const { rows, cols } of DIFFICULTIES) {
+    for (const { rows, cols, minTurns } of DIFFICULTIES) {
       it(`${ruleId} ${rows}x${cols} — 200 seeds`, () => {
         for (let seed = 0; seed < 200; seed++) {
           const p = generatePuzzle(rows, cols, seed, ruleId, TRAIL, DIST, AVOID);
           assert.ok(p, `failed seed ${seed}`);
           assert.equal(validatePuzzle(p, rows, cols, ruleId), null, `seed ${seed}`);
+          assert.ok(countTurns(p.path) >= minTurns, `seed ${seed} turns ${countTurns(p.path)} < ${minTurns}`);
         }
       });
     }
