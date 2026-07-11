@@ -804,6 +804,8 @@ function drawGrid(puzzle, config) {
   const { rows, cols, icon } = config;
   const cellSize = Math.min(520 / cols, 480 / rows, 56);
   const margin = 12;
+  const strokeW = 1;
+  const strokePad = strokeW;
   const w = cols * cellSize + margin * 2;
   const h = rows * cellSize + margin * 2;
 
@@ -811,12 +813,15 @@ function drawGrid(puzzle, config) {
     id: 'puzzleSvg',
     width: w,
     height: h,
-    viewBox: `0 0 ${w} ${h}`,
-    xmlns: NS
+    viewBox: `${-strokePad} ${-strokePad} ${w + strokePad * 2} ${h + strokePad * 2}`,
+    xmlns: NS,
+    overflow: 'visible'
   });
 
   svg.appendChild(el('rect', {
-    x: 0, y: 0, width: w, height: h, rx: 10, fill: '#fff', stroke: '#ccc', 'stroke-width': 1
+    x: strokeW / 2, y: strokeW / 2,
+    width: w - strokeW, height: h - strokeW,
+    rx: 10, fill: '#fff', stroke: '#ccc', 'stroke-width': strokeW
   }));
 
   const g = el('g');
