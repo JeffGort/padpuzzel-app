@@ -99,20 +99,46 @@ body {
   font-size: .95rem;
   background: #fff;
 }
-.color-row {
+.color-choices {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .45rem;
+}
+.color-choice {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: .5rem;
-}
-.color-row input[type="color"] {
-  width: 42px;
-  height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px;
+  gap: .25rem;
+  padding: .45rem .25rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
   cursor: pointer;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: border-color .15s, box-shadow .15s;
 }
-.color-row span { font-size: .85rem; }
+.color-choice:hover { border-color: #b8b0a8; background: #fff; }
+.color-choice.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(122, 158, 126, .25);
+  color: var(--text);
+  background: #fff;
+}
+.color-swatch {
+  width: 100%;
+  max-width: 52px;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.08);
+}
+.color-hint {
+  margin-top: .45rem;
+  font-size: .8rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
 .size-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -291,41 +317,27 @@ button.secondary:hover { background: #f8f6f4; }
       </div>
     </div>
 
-    <div class="field">
-      <label>Padkleur</label>
-      <div class="color-row">
-        <input type="color" id="trailLight" value="#DDD4A0">
-        <input type="color" id="trailDark" value="#C8BE88">
-        <span>Licht / donker</span>
+    <div class="field" id="colorField">
+      <label id="colorFieldLabel" for="colorChoices">Welke kleur moet het kind volgen?</label>
+      <div class="color-choices" id="colorChoices" role="group" aria-labelledby="colorFieldLabel">
+        <button type="button" class="color-choice selected" data-color="geel" aria-pressed="true">
+          <span class="color-swatch" style="background:linear-gradient(135deg,#DDD4A0 50%,#C8BE88 50%)"></span>
+          Geel
+        </button>
+        <button type="button" class="color-choice" data-color="groen" aria-pressed="false">
+          <span class="color-swatch" style="background:linear-gradient(135deg,#C4D2B8 50%,#A8B89E 50%)"></span>
+          Groen
+        </button>
+        <button type="button" class="color-choice" data-color="roze" aria-pressed="false">
+          <span class="color-swatch" style="background:linear-gradient(135deg,#E8B4B8 50%,#D4989E 50%)"></span>
+          Roze
+        </button>
+        <button type="button" class="color-choice" data-color="blauw" aria-pressed="false">
+          <span class="color-swatch" style="background:linear-gradient(135deg,#B4C4CC 50%,#9AADB6 50%)"></span>
+          Blauw
+        </button>
       </div>
-    </div>
-
-    <div class="field" id="avoidField" style="display:none">
-      <label>Vermijd deze kleur</label>
-      <div class="color-row">
-        <input type="color" id="avoidLight" value="#E8B4B8">
-        <input type="color" id="avoidDark" value="#D4989E">
-        <span>Licht / donker</span>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Afleidingskleuren (3)</label>
-      <div class="color-row" style="margin-bottom:.35rem">
-        <input type="color" id="dist1Light" value="#C4D2B8">
-        <input type="color" id="dist1Dark" value="#A8B89E">
-        <span>1</span>
-      </div>
-      <div class="color-row" style="margin-bottom:.35rem">
-        <input type="color" id="dist2Light" value="#D4C0B4">
-        <input type="color" id="dist2Dark" value="#BFA898">
-        <span>2</span>
-      </div>
-      <div class="color-row">
-        <input type="color" id="dist3Light" value="#B4C4CC">
-        <input type="color" id="dist3Dark" value="#9AADB6">
-        <span>3</span>
-      </div>
+      <p class="color-hint" id="colorHint"></p>
     </div>
 
     <div class="instruction-box" id="instructionPreview"></div>
@@ -353,13 +365,29 @@ button.secondary:hover { background: #f8f6f4; }
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script>
 /* ── CONFIG ─────────────────────────────────────────────────── */
+const PALETTE = {
+  geel:  { light: '#DDD4A0', dark: '#C8BE88', name: 'geel',  adj: 'gele' },
+  groen: { light: '#C4D2B8', dark: '#A8B89E', name: 'groen', adj: 'groene' },
+  roze:  { light: '#E8B4B8', dark: '#D4989E', name: 'roze',  adj: 'roze' },
+  blauw: { light: '#B4C4CC', dark: '#9AADB6', name: 'blauw', adj: 'blauwe' }
+};
+const PALETTE_KEYS = Object.keys(PALETTE);
+
 const DIFFICULTY_PRESETS = {
-  easy:   { rows: 6, cols: 7,  trailLight: '#FFE566', trailDark: '#E6C200',
-            dist: [['#8FD694','#5CB85C'], ['#FF9AA2','#E57373'], ['#87CEEB','#4A9FD4']] },
-  medium: { rows: 9, cols: 8,  trailLight: '#DDD4A0', trailDark: '#C8BE88',
-            dist: [['#C4D2B8','#A8B89E'], ['#D4C0B4','#BFA898'], ['#B4C4CC','#9AADB6']] },
-  hard:   { rows: 11, cols: 12, trailLight: '#D8D0A8', trailDark: '#BFB88E',
-            dist: [['#C8D4C0','#B0BCA8'], ['#D0C8C0','#B8B0A8'], ['#C0CCD4','#A8B4BC']] }
+  easy:   { rows: 6, cols: 7,  brighten: 28 },
+  medium: { rows: 9, cols: 8,  brighten: 0 },
+  hard:   { rows: 11, cols: 12, brighten: -12 }
+};
+
+const COLOR_UI = {
+  singleColor: {
+    label: 'Welke kleur moet het kind volgen?',
+    hint: 'Het juiste pad bestaat alleen uit deze kleur. Andere vakjes krijgen automatisch de overige kleuren.'
+  },
+  avoidColor: {
+    label: 'Welke kleur mag NIET?',
+    hint: 'Het pad gebruikt alleen de andere kleuren. Op afleidingsvakjes komt ook de verboden kleur voor.'
+  }
 };
 
 const THEME_PACKS = {
@@ -518,6 +546,55 @@ function validatePuzzle(puzzle, rows, cols, ruleId) {
 }
 
 /* ── RULES ────────────────────────────────────────────────── */
+function brighten(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, ((n >> 16) & 255) + amount);
+  const g = Math.min(255, ((n >> 8) & 255) + amount);
+  const b = Math.min(255, (n & 255) + amount);
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+function palettePair(key, brightenAmount = 0) {
+  const p = PALETTE[key];
+  if (!brightenAmount) return { light: p.light, dark: p.dark };
+  const light = brightenAmount > 0 ? brighten(p.light, brightenAmount) : darken(p.light, -brightenAmount);
+  const dark = brightenAmount > 0 ? brighten(p.dark, brightenAmount) : darken(p.dark, -brightenAmount);
+  return { light, dark };
+}
+
+function getChosenColorKey() {
+  const btn = document.querySelector('.color-choice.selected');
+  return (btn && btn.dataset.color) || 'geel';
+}
+
+function setChosenColorKey(key) {
+  document.querySelectorAll('.color-choice').forEach(btn => {
+    const on = btn.dataset.color === key;
+    btn.classList.toggle('selected', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
+function updateColorFieldUi(ruleId) {
+  const ui = COLOR_UI[ruleId] || COLOR_UI.singleColor;
+  document.getElementById('colorFieldLabel').textContent = ui.label;
+  document.getElementById('colorHint').textContent = ui.hint;
+}
+
+function buildColorConfig(ruleId, chosenKey, brightenAmount) {
+  const others = PALETTE_KEYS.filter(k => k !== chosenKey);
+  if (ruleId === 'avoidColor') {
+    const avoid = palettePair(chosenKey, brightenAmount);
+    const safe = others.map(k => palettePair(k, brightenAmount));
+    return { trail: safe[0], distractors: safe, avoid, chosenColor: chosenKey };
+  }
+  return {
+    trail: palettePair(chosenKey, brightenAmount),
+    distractors: others.map(k => palettePair(k, brightenAmount)),
+    avoid: palettePair('roze', brightenAmount),
+    chosenColor: chosenKey
+  };
+}
 function darken(hex, amount) {
   const n = parseInt(hex.slice(1), 16);
   const r = Math.max(0, ((n >> 16) & 255) - amount);
@@ -701,25 +778,11 @@ function drawGrid(puzzle, config) {
   return svg;
 }
 
-function colorName(hex) {
-  const names = {
-    '#ddd4a0': 'gele', '#c8be88': 'gele', '#ffe566': 'gele', '#e6c200': 'gele',
-    '#d8d0a8': 'gele', '#bfb88e': 'gele',
-    '#e8b4b8': 'roze', '#d4989e': 'roze',
-    '#c4d2b8': 'groene', '#a8b89e': 'groene', '#8fd694': 'groene',
-    '#d4c0b4': 'bruine', '#bfa898': 'bruine',
-    '#b4c4cc': 'blauwe', '#9aadb6': 'blauwe', '#87ceeb': 'blauwe'
-  };
-  return names[hex.toLowerCase()] || 'de juiste';
-}
-
 function getInstruction(config) {
   const theme = THEME_PACKS[config.themeId];
-  const name = config.ruleId === 'avoidColor'
-    ? colorName(config.avoid.light)
-    : colorName(config.trail.light);
+  const adj = PALETTE[config.chosenColor].adj;
   const fn = RULE_TEXT[config.ruleId] || RULE_TEXT.singleColor;
-  return fn(theme, name);
+  return fn(theme, adj);
 }
 
 /* ── UI STATE ───────────────────────────────────────────────── */
@@ -728,26 +791,19 @@ let currentPuzzle = null;
 let debounceTimer = null;
 
 function readConfig() {
+  const ruleId = document.getElementById('rule').value;
+  const difficulty = document.getElementById('difficulty').value;
+  const preset = DIFFICULTY_PRESETS[difficulty] || DIFFICULTY_PRESETS.medium;
+  const chosenKey = getChosenColorKey();
+  const colors = buildColorConfig(ruleId, chosenKey, preset.brighten || 0);
   return {
     rows: parseInt(document.getElementById('rows').value, 10),
     cols: parseInt(document.getElementById('cols').value, 10),
-    ruleId: document.getElementById('rule').value,
+    ruleId,
     themeId: document.getElementById('theme').value,
     icon: document.getElementById('icon').value,
     seed: currentSeed,
-    trail: colorPair(
-      document.getElementById('trailLight').value,
-      document.getElementById('trailDark').value
-    ),
-    avoid: colorPair(
-      document.getElementById('avoidLight').value,
-      document.getElementById('avoidDark').value
-    ),
-    distractors: [
-      colorPair(document.getElementById('dist1Light').value, document.getElementById('dist1Dark').value),
-      colorPair(document.getElementById('dist2Light').value, document.getElementById('dist2Dark').value),
-      colorPair(document.getElementById('dist3Light').value, document.getElementById('dist3Dark').value)
-    ]
+    ...colors
   };
 }
 
@@ -756,12 +812,6 @@ function applyDifficultyPreset(level) {
   if (!p) return;
   document.getElementById('rows').value = p.rows;
   document.getElementById('cols').value = p.cols;
-  document.getElementById('trailLight').value = p.trailLight;
-  document.getElementById('trailDark').value = p.trailDark;
-  p.dist.forEach((d, i) => {
-    document.getElementById(`dist${i + 1}Light`).value = d[0];
-    document.getElementById(`dist${i + 1}Dark`).value = d[1];
-  });
 }
 
 function regenerate() {
@@ -880,7 +930,6 @@ async function downloadPdf() {
 function init() {
   const difficulty = document.getElementById('difficulty');
   const rule = document.getElementById('rule');
-  const avoidField = document.getElementById('avoidField');
 
   difficulty.addEventListener('change', () => {
     applyDifficultyPreset(difficulty.value);
@@ -888,8 +937,15 @@ function init() {
   });
 
   rule.addEventListener('change', () => {
-    avoidField.style.display = rule.value === 'avoidColor' ? '' : 'none';
+    updateColorFieldUi(rule.value);
     scheduleRegenerate();
+  });
+
+  document.querySelectorAll('.color-choice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setChosenColorKey(btn.dataset.color);
+      scheduleRegenerate();
+    });
   });
 
   document.getElementById('theme').addEventListener('change', () => {
@@ -905,10 +961,6 @@ function init() {
     document.getElementById(id).addEventListener('input', scheduleRegenerate);
   });
 
-  document.querySelectorAll('input[type="color"]').forEach(inp => {
-    inp.addEventListener('input', scheduleRegenerate);
-  });
-
   document.getElementById('btnNew').addEventListener('click', () => {
     currentSeed = randomSeed();
     regenerate();
@@ -919,7 +971,7 @@ function init() {
   document.getElementById('btnPrint').addEventListener('click', () => window.print());
 
   applyDifficultyPreset(difficulty.value);
-  avoidField.style.display = 'none';
+  updateColorFieldUi(rule.value);
   regenerate();
 }
 

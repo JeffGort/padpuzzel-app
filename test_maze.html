@@ -192,13 +192,21 @@ function validatePuzzle(puzzle, rows, cols, ruleId) {
   return null;
 }
 
-const TRAIL = colorPair('#DDD4A0', '#C8BE88');
-const DIST = [
-  colorPair('#C4D2B8', '#A8B89E'),
-  colorPair('#D4C0B4', '#BFA898'),
-  colorPair('#B4C4CC', '#9AADB6')
-];
-const AVOID = colorPair('#E8B4B8', '#D4989E');
+const PALETTE = {
+  geel:  { light: '#DDD4A0', dark: '#C8BE88', name: 'geel',  adj: 'gele' },
+  groen: { light: '#C4D2B8', dark: '#A8B89E', name: 'groen', adj: 'groene' },
+  roze:  { light: '#E8B4B8', dark: '#D4989E', name: 'roze',  adj: 'roze' },
+  blauw: { light: '#B4C4CC', dark: '#9AADB6', name: 'blauw', adj: 'blauwe' }
+};
+
+function palettePair(key) {
+  const p = PALETTE[key];
+  return { light: p.light, dark: p.dark };
+}
+
+const TRAIL = palettePair('geel');
+const DIST = ['groen', 'roze', 'blauw'].map(palettePair);
+const AVOID = palettePair('roze');
 const DIFFICULTIES = [
   { rows: 6, cols: 7 },
   { rows: 9, cols: 8 },
