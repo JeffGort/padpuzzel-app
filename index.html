@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<title>Padpuzzel Generator</title>
+<style>
+:root {
+  --bg: #f5f0eb;
+  --panel: #fff;
+  --border: #d0c8c0;
+  --text: #3d3835;
+  --text-muted: #7a726c;
+  --accent: #7a9e7e;
+  --accent-hover: #5f8263;
+  --shadow: rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+.app {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 1.25rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem;
+  min-height: 100vh;
+}
+@media (max-width: 800px) {
+  .app { grid-template-columns: 1fr; }
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 12px var(--shadow);
+  height: fit-content;
+}
+.panel h1 {
+  font-size: 1.35rem;
+  margin-bottom: .25rem;
+}
+.panel .subtitle {
+  color: var(--text-muted);
+  font-size: .85rem;
+  margin-bottom: 1rem;
+}
+.field { margin-bottom: .85rem; }
+.field label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  margin-bottom: .3rem;
+  color: var(--text-muted);
+}
+.field select, .field input[type="number"] {
+  width: 100%;
+  padding: .5rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: .95rem;
+  background: #fff;
+}
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.color-row input[type="color"] {
+  width: 42px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  cursor: pointer;
+}
+.color-row span { font-size: .85rem; }
+.size-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+}
+.size-row input { width: 100%; }
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: 1rem;
+}
+button {
+  padding: .55rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: .9rem;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+button:hover { background: var(--accent-hover); }
+button.secondary {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button.secondary:hover { background: #f8f6f4; }
+.instruction-box {
+  margin-top: .75rem;
+  padding: .65rem .75rem;
+  background: #f8f6f4;
+  border-radius: 8px;
+  font-size: .9rem;
+  line-height: 1.4;
+  border-left: 3px solid var(--accent);
+}
+.preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.preview-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 12px var(--shadow);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.preview-instruction {
+  font-size: 1.05rem;
+  text-align: center;
+  margin-bottom: 1rem;
+  max-width: 520px;
+  line-height: 1.45;
+}
+#puzzleSvg {
+  max-width: 100%;
+  height: auto;
+}
+.theme-labels {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 480px;
+  font-size: .8rem;
+  color: var(--text-muted);
+  margin-top: .5rem;
+}
+.hidden { display: none !important; }
+
+@media print {
+  body { background: #fff; }
+  .panel, .btn-row, .theme-labels, .no-print { display: none !important; }
+  .app { display: block; padding: 0; max-width: none; }
+  .preview-card { border: none; box-shadow: none; padding: 0; }
+  .preview-instruction { font-size: 14pt; margin-bottom: 8mm; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel no-print">
+    <h1>Padpuzzel</h1>
+    <p class="subtitle">Kleurpad-puzzels voor kinderen</p>
+
+    <div class="field">
+      <label for="difficulty">Leeftijd</label>
+      <select id="difficulty">
+        <option value="easy">Makkelijk (3–5 jaar)</option>
+        <option value="medium" selected>Middel (6–8 jaar)</option>
+        <option value="hard">Moeilijk (9+ jaar)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="rule">Regel</label>
+      <select id="rule">
+        <option value="singleColor">Eén kleur volgen</option>
+        <option value="avoidColor">Vermijd één kleur</option>
+        <option value="multiColor" disabled>Meerdere kleuren — Binnenkort</option>
+        <option value="alternateColors" disabled>Afwisselen — Binnenkort</option>
+        <option value="colorSequence" disabled>Vaste volgorde — Binnenkort</option>
+        <option value="shape" disabled>Vorm — Binnenkort</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="theme">Thema</label>
+      <select id="theme">
+        <option value="bloementuin">Bloementuin</option>
+        <option value="dierentuin">Dierentuin</option>
+        <option value="ruimte">Ruimte</option>
+        <option value="onderwater">Onder water</option>
+        <option value="sprookje">Sprookje</option>
+        <option value="seizoenen">Seizoenen</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="icon">Icoon</label>
+      <select id="icon">
+        <option value="flower">Bloem</option>
+        <option value="ball">Bal</option>
+        <option value="heart">Hart</option>
+        <option value="wheel">Wiel</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Grootte (rijen × kolommen)</label>
+      <div class="size-row">
+        <input type="number" id="rows" min="5" max="14" value="9">
+        <input type="number" id="cols" min="5" max="14" value="8">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Padkleur</label>
+      <div class="color-row">
+        <input type="color" id="trailLight" value="#DDD4A0">
+        <input type="color" id="trailDark" value="#C8BE88">
+        <span>Licht / donker</span>
+      </div>
+    </div>
+
+    <div class="field" id="avoidField" style="display:none">
+      <label>Vermijd deze kleur</label>
+      <div class="color-row">
+        <input type="color" id="avoidLight" value="#E8B4B8">
+        <input type="color" id="avoidDark" value="#D4989E">
+        <span>Licht / donker</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Afleidingskleuren (3)</label>
+      <div class="color-row" style="margin-bottom:.35rem">
+        <input type="color" id="dist1Light" value="#C4D2B8">
+        <input type="color" id="dist1Dark" value="#A8B89E">
+        <span>1</span>
+      </div>
+      <div class="color-row" style="margin-bottom:.35rem">
+        <input type="color" id="dist2Light" value="#D4C0B4">
+        <input type="color" id="dist2Dark" value="#BFA898">
+        <span>2</span>
+      </div>
+      <div class="color-row">
+        <input type="color" id="dist3Light" value="#B4C4CC">
+        <input type="color" id="dist3Dark" value="#9AADB6">
+        <span>3</span>
+      </div>
+    </div>
+
+    <div class="instruction-box" id="instructionPreview"></div>
+
+    <div class="btn-row">
+      <button id="btnNew">Nieuwe puzzel</button>
+      <button class="secondary" id="btnPng">Download PNG</button>
+      <button class="secondary" id="btnPrint">Print</button>
+    </div>
+  </aside>
+
+  <main class="preview-wrap">
+    <div class="preview-card" id="printArea">
+      <p class="preview-instruction" id="instructionDisplay"></p>
+      <div id="svgHost"></div>
+      <div class="theme-labels no-print">
+        <span id="startLabel">Start</span>
+        <span id="goalLabel">Doel</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ── CONFIG ─────────────────────────────────────────────────── */
+const DIFFICULTY_PRESETS = {
+  easy:   { rows: 6, cols: 7,  trailLight: '#FFE566', trailDark: '#E6C200',
+            dist: [['#8FD694','#5CB85C'], ['#FF9AA2','#E57373'], ['#87CEEB','#4A9FD4']] },
+  medium: { rows: 9, cols: 8,  trailLight: '#DDD4A0', trailDark: '#C8BE88',
+            dist: [['#C4D2B8','#A8B89E'], ['#D4C0B4','#BFA898'], ['#B4C4CC','#9AADB6']] },
+  hard:   { rows: 11, cols: 12, trailLight: '#D8D0A8', trailDark: '#BFB88E',
+            dist: [['#C8D4C0','#B0BCA8'], ['#D0C8C0','#B8B0A8'], ['#C0CCD4','#A8B4BC']] }
+};
+
+const THEME_PACKS = {
+  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder' },
+  dierentuin:  { start: 'Aap', goal: 'Bananenmand', figure: 'aap' },
+  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut' },
+  onderwater:  { start: 'Vis', goal: 'Koraalrif', figure: 'vis' },
+  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses' },
+  seizoenen:   { start: 'Eekhoorn', goal: 'Boom', figure: 'eekhoorn' }
+};
+
+const RULE_TEXT = {
+  singleColor: (theme, colorName) =>
+    `Help de ${theme.figure} van boven naar beneden. Loop alleen over ${colorName} ${theme.figure === 'vlinder' ? 'bloemen' : 'vakjes'}.`,
+  avoidColor: (theme, colorName) =>
+    `Help de ${theme.figure} van boven naar beneden. Je mag overal staan, behalve op ${colorName} vakjes.`
+};
+
+/* ── RNG ────────────────────────────────────────────────────── */
+function makeRng(seed) {
+  let s = (seed >>> 0) || 1;
+  return {
+    next() {
+      s += 0x6D2B79F5;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    },
+    int(n) { return Math.floor(this.next() * n); },
+    choice(arr) { return arr[this.int(arr.length)]; },
+    shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = this.int(i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+  };
+}
+
+function randomSeed() {
+  return (Date.now() ^ (Math.random() * 0xFFFFFFFF)) >>> 0;
+}
+
+/* ── MAZE: DFS PATH ─────────────────────────────────────────── */
+function cellKey(r, c) { return r + ',' + c; }
+
+function neighbors4(r, c, rows, cols) {
+  const n = [];
+  if (r > 0) n.push([r - 1, c]);
+  if (r < rows - 1) n.push([r + 1, c]);
+  if (c > 0) n.push([r, c - 1]);
+  if (c < cols - 1) n.push([r, c + 1]);
+  return n;
+}
+
+function dfsPath(rows, cols, rng) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const startCol = rng.int(cols);
+    const goalCol = rng.int(cols);
+    const start = [0, startCol];
+    const goal = [rows - 1, goalCol];
+    const startK = cellKey(...start);
+    const goalK = cellKey(...goal);
+
+    const stack = [start.slice()];
+    const parent = new Map([[startK, null]]);
+    const visited = new Set([startK]);
+
+    while (stack.length) {
+      const [r, c] = stack[stack.length - 1];
+      if (cellKey(r, c) === goalK) {
+        const path = [];
+        let cur = cellKey(r, c);
+        while (cur) {
+          const [rr, cc] = cur.split(',').map(Number);
+          path.unshift([rr, cc]);
+          cur = parent.get(cur);
+        }
+        return path;
+      }
+
+      const nbrs = rng.shuffle(neighbors4(r, c, rows, cols));
+      let extended = false;
+      for (const [nr, nc] of nbrs) {
+        const nk = cellKey(nr, nc);
+        if (!visited.has(nk)) {
+          visited.add(nk);
+          parent.set(nk, cellKey(r, c));
+          stack.push([nr, nc]);
+          extended = true;
+          break;
+        }
+      }
+      if (!extended) stack.pop();
+    }
+  }
+  return null;
+}
+
+/* ── VALIDATE ───────────────────────────────────────────────── */
+function isOrthogonal(a, b) {
+  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
+}
+
+function validatePuzzle(puzzle, rows, cols, ruleId) {
+  const { path, grid } = puzzle;
+  if (!path || path.length < rows) return 'Pad te kort';
+
+  if (path[0][0] !== 0) return 'Start niet op bovenste rij';
+  if (path[path.length - 1][0] !== rows - 1) return 'Einde niet op onderste rij';
+
+  const seen = new Set();
+  for (const [r, c] of path) {
+    const k = cellKey(r, c);
+    if (seen.has(k)) return 'Pad herhaalt cel';
+    seen.add(k);
+  }
+
+  for (let i = 1; i < path.length; i++) {
+    if (!isOrthogonal(path[i - 1], path[i])) return 'Schuine stap in pad';
+  }
+
+  const index = new Map(path.map((cell, i) => [cellKey(...cell), i]));
+  for (const a of path) {
+    for (const b of path) {
+      if (a === b) continue;
+      if (isOrthogonal(a, b) && Math.abs(index.get(cellKey(...a)) - index.get(cellKey(...b))) !== 1) {
+        return 'Vertakking in pad';
+      }
+    }
+  }
+
+  const trailCells = new Set(path.map(([r, c]) => cellKey(r, c)));
+  let bottomTrail = 0;
+  for (let c = 0; c < cols; c++) {
+    if (grid[rows - 1][c].isTrail) bottomTrail++;
+  }
+  if (bottomTrail !== 1) return 'Onderste rij moet precies 1 padcel hebben';
+
+  if (ruleId === 'singleColor') {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const onPath = trailCells.has(cellKey(r, c));
+        if (grid[r][c].isTrail !== onPath) return 'Padkleur komt niet overeen';
+      }
+    }
+  }
+
+  if (ruleId === 'avoidColor') {
+    const avoid = puzzle.avoid;
+    for (const [r, c] of path) {
+      const cell = grid[r][c];
+      if (cell.light.toLowerCase() === avoid.light.toLowerCase()) return 'Padcel heeft vermeden kleur';
+    }
+  }
+
+  return null;
+}
+
+/* ── RULES ────────────────────────────────────────────────── */
+function darken(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, ((n >> 16) & 255) - amount);
+  const g = Math.max(0, ((n >> 8) & 255) - amount);
+  const b = Math.max(0, (n & 255) - amount);
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+function colorPair(light, dark) {
+  return { light, dark: dark || darken(light, 24) };
+}
+
+function isAvoided(pair, avoid) {
+  return pair.light.toLowerCase() === avoid.light.toLowerCase();
+}
+
+function fillGridSingle(path, rows, cols, rng, trail, distractors) {
+  const route = new Set(path.map(([r, c]) => cellKey(r, c)));
+  const grid = [];
+  for (let r = 0; r < rows; r++) {
+    const row = [];
+    for (let c = 0; c < cols; c++) {
+      if (route.has(cellKey(r, c))) {
+        row.push({ ...trail, isTrail: true });
+      } else {
+        row.push({ ...rng.choice(distractors), isTrail: false });
+      }
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+
+function fillGridAvoid(path, rows, cols, rng, trail, distractors, avoid) {
+  const route = new Set(path.map(([r, c]) => cellKey(r, c)));
+  const safeForPath = distractors.filter(d => !isAvoided(d, avoid));
+  if (!safeForPath.some(d => d.light === trail.light)) safeForPath.push(trail);
+  const allDistractors = [...distractors, avoid];
+
+  const grid = [];
+  for (let r = 0; r < rows; r++) {
+    const row = [];
+    for (let c = 0; c < cols; c++) {
+      if (route.has(cellKey(r, c))) {
+        row.push({ ...rng.choice(safeForPath), isTrail: true });
+      } else {
+        row.push({ ...rng.choice(allDistractors), isTrail: false });
+      }
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+
+function generatePuzzle(config) {
+  const { rows, cols, seed, ruleId, trail, distractors, avoid } = config;
+  const rng = makeRng(seed);
+
+  for (let tryNum = 0; tryNum < 100; tryNum++) {
+    const path = dfsPath(rows, cols, rng);
+    if (!path) continue;
+
+    let grid;
+    if (ruleId === 'avoidColor') {
+      grid = fillGridAvoid(path, rows, cols, rng, trail, distractors, avoid);
+    } else {
+      grid = fillGridSingle(path, rows, cols, rng, trail, distractors);
+    }
+
+    const puzzle = {
+      grid,
+      path,
+      startCol: path[0][1],
+      endCol: path[path.length - 1][1],
+      avoid: avoid
+    };
+
+    const err = validatePuzzle(puzzle, rows, cols, ruleId);
+    if (!err) return puzzle;
+  }
+  return null;
+}
+
+/* ── RENDER: ICONS ────────────────────────────────────────── */
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  return e;
+}
+
+function drawFlower(g, cx, cy, s, light, dark) {
+  const petal = s * 0.38;
+  const offsets = [[0, s * 0.55], [s * 0.55, 0], [0, -s * 0.55], [-s * 0.55, 0]];
+  for (const [dx, dy] of offsets) {
+    g.appendChild(el('circle', { cx: cx + dx, cy: cy + dy, r: petal, fill: light }));
+  }
+  g.appendChild(el('circle', { cx, cy, r: s * 0.28, fill: dark }));
+}
+
+function drawBall(g, cx, cy, s, light, dark) {
+  g.appendChild(el('circle', { cx, cy, r: s * 0.45, fill: light }));
+  g.appendChild(el('circle', { cx: cx - s * 0.12, cy: cy - s * 0.12, r: s * 0.12, fill: '#fff', opacity: '0.55' }));
+  g.appendChild(el('circle', { cx, cy, r: s * 0.18, fill: dark }));
+}
+
+function drawHeart(g, cx, cy, s, light, dark) {
+  const path = el('path', {
+    d: `M ${cx} ${cy + s * 0.35}
+        C ${cx - s * 0.5} ${cy - s * 0.05}, ${cx - s * 0.45} ${cy - s * 0.45}, ${cx} ${cy - s * 0.15}
+        C ${cx + s * 0.45} ${cy - s * 0.45}, ${cx + s * 0.5} ${cy - s * 0.05}, ${cx} ${cy + s * 0.35} Z`,
+    fill: light
+  });
+  g.appendChild(path);
+  g.appendChild(el('circle', { cx, cy: cy + s * 0.05, r: s * 0.1, fill: dark }));
+}
+
+function drawWheel(g, cx, cy, s, light, dark) {
+  g.appendChild(el('circle', { cx, cy, r: s * 0.45, fill: light }));
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    g.appendChild(el('line', {
+      x1: cx, y1: cy,
+      x2: cx + Math.cos(a) * s * 0.4,
+      y2: cy + Math.sin(a) * s * 0.4,
+      stroke: dark, 'stroke-width': s * 0.08, 'stroke-linecap': 'round'
+    }));
+  }
+  g.appendChild(el('circle', { cx, cy, r: s * 0.15, fill: dark }));
+}
+
+const ICON_DRAWERS = { flower: drawFlower, ball: drawBall, heart: drawHeart, wheel: drawWheel };
+
+function drawGrid(puzzle, config) {
+  const { rows, cols, icon } = config;
+  const cellSize = Math.min(520 / cols, 480 / rows, 56);
+  const margin = 12;
+  const w = cols * cellSize + margin * 2;
+  const h = rows * cellSize + margin * 2;
+
+  const svg = el('svg', {
+    id: 'puzzleSvg',
+    width: w,
+    height: h,
+    viewBox: `0 0 ${w} ${h}`,
+    xmlns: NS
+  });
+
+  svg.appendChild(el('rect', {
+    x: 0, y: 0, width: w, height: h, rx: 10, fill: '#fff', stroke: '#ccc', 'stroke-width': 1
+  }));
+
+  const g = el('g');
+  svg.appendChild(g);
+
+  const drawer = ICON_DRAWERS[icon] || drawFlower;
+  const s = cellSize * 0.42;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = margin + c * cellSize + cellSize / 2;
+      const cy = margin + r * cellSize + cellSize / 2;
+      const cell = puzzle.grid[r][c];
+      drawer(g, cx, cy, s, cell.light, cell.dark);
+
+      if (r === 0 && c === puzzle.startCol) {
+        g.appendChild(el('circle', {
+          cx, cy: cy - cellSize * 0.38, r: 5, fill: '#7a9e7e', stroke: '#fff', 'stroke-width': 1.5
+        }));
+      }
+      if (r === rows - 1 && c === puzzle.endCol) {
+        g.appendChild(el('rect', {
+          x: cx - 6, y: cy + cellSize * 0.3, width: 12, height: 4, rx: 2, fill: '#c8a87a'
+        }));
+      }
+    }
+  }
+
+  return svg;
+}
+
+function colorName(hex) {
+  const names = {
+    '#ddd4a0': 'gele', '#c8be88': 'gele', '#ffe566': 'gele', '#e6c200': 'gele',
+    '#d8d0a8': 'gele', '#bfb88e': 'gele',
+    '#e8b4b8': 'roze', '#d4989e': 'roze',
+    '#c4d2b8': 'groene', '#a8b89e': 'groene', '#8fd694': 'groene',
+    '#d4c0b4': 'bruine', '#bfa898': 'bruine',
+    '#b4c4cc': 'blauwe', '#9aadb6': 'blauwe', '#87ceeb': 'blauwe'
+  };
+  return names[hex.toLowerCase()] || 'de juiste';
+}
+
+function getInstruction(config) {
+  const theme = THEME_PACKS[config.themeId];
+  const name = config.ruleId === 'avoidColor'
+    ? colorName(config.avoid.light)
+    : colorName(config.trail.light);
+  const fn = RULE_TEXT[config.ruleId] || RULE_TEXT.singleColor;
+  return fn(theme, name);
+}
+
+/* ── UI STATE ───────────────────────────────────────────────── */
+let currentSeed = randomSeed();
+let currentPuzzle = null;
+let debounceTimer = null;
+
+function readConfig() {
+  return {
+    rows: parseInt(document.getElementById('rows').value, 10),
+    cols: parseInt(document.getElementById('cols').value, 10),
+    ruleId: document.getElementById('rule').value,
+    themeId: document.getElementById('theme').value,
+    icon: document.getElementById('icon').value,
+    seed: currentSeed,
+    trail: colorPair(
+      document.getElementById('trailLight').value,
+      document.getElementById('trailDark').value
+    ),
+    avoid: colorPair(
+      document.getElementById('avoidLight').value,
+      document.getElementById('avoidDark').value
+    ),
+    distractors: [
+      colorPair(document.getElementById('dist1Light').value, document.getElementById('dist1Dark').value),
+      colorPair(document.getElementById('dist2Light').value, document.getElementById('dist2Dark').value),
+      colorPair(document.getElementById('dist3Light').value, document.getElementById('dist3Dark').value)
+    ]
+  };
+}
+
+function applyDifficultyPreset(level) {
+  const p = DIFFICULTY_PRESETS[level];
+  if (!p) return;
+  document.getElementById('rows').value = p.rows;
+  document.getElementById('cols').value = p.cols;
+  document.getElementById('trailLight').value = p.trailLight;
+  document.getElementById('trailDark').value = p.trailDark;
+  p.dist.forEach((d, i) => {
+    document.getElementById(`dist${i + 1}Light`).value = d[0];
+    document.getElementById(`dist${i + 1}Dark`).value = d[1];
+  });
+}
+
+function regenerate() {
+  const config = readConfig();
+  const puzzle = generatePuzzle(config);
+  if (!puzzle) {
+    document.getElementById('instructionDisplay').textContent = 'Kon geen puzzel maken — probeer opnieuw.';
+    return;
+  }
+  currentPuzzle = puzzle;
+
+  const instruction = getInstruction(config);
+  document.getElementById('instructionDisplay').textContent = instruction;
+  document.getElementById('instructionPreview').textContent = instruction;
+
+  const theme = THEME_PACKS[config.themeId];
+  document.getElementById('startLabel').textContent = '▲ ' + theme.start;
+  document.getElementById('goalLabel').textContent = theme.goal + ' ▼';
+
+  const host = document.getElementById('svgHost');
+  host.innerHTML = '';
+  host.appendChild(drawGrid(puzzle, config));
+}
+
+function scheduleRegenerate() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(regenerate, 150);
+}
+
+function downloadPng() {
+  const svg = document.getElementById('puzzleSvg');
+  if (!svg) return;
+  const xml = new XMLSerializer().serializeToString(svg);
+  const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width * scale;
+    canvas.height = img.height * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    canvas.toBlob(b => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = 'padpuzzel.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, 'image/png');
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+/* ── INIT ───────────────────────────────────────────────────── */
+function init() {
+  const difficulty = document.getElementById('difficulty');
+  const rule = document.getElementById('rule');
+  const avoidField = document.getElementById('avoidField');
+
+  difficulty.addEventListener('change', () => {
+    applyDifficultyPreset(difficulty.value);
+    scheduleRegenerate();
+  });
+
+  rule.addEventListener('change', () => {
+    avoidField.style.display = rule.value === 'avoidColor' ? '' : 'none';
+    scheduleRegenerate();
+  });
+
+  ['rows', 'cols', 'theme', 'icon'].forEach(id => {
+    document.getElementById(id).addEventListener('change', scheduleRegenerate);
+    document.getElementById(id).addEventListener('input', scheduleRegenerate);
+  });
+
+  document.querySelectorAll('input[type="color"]').forEach(inp => {
+    inp.addEventListener('input', scheduleRegenerate);
+  });
+
+  document.getElementById('btnNew').addEventListener('click', () => {
+    currentSeed = randomSeed();
+    regenerate();
+  });
+
+  document.getElementById('btnPng').addEventListener('click', downloadPng);
+  document.getElementById('btnPrint').addEventListener('click', () => window.print());
+
+  applyDifficultyPreset(difficulty.value);
+  avoidField.style.display = 'none';
+  regenerate();
+}
+
+init();
+</script>
+</body>
+</html>

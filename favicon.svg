@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Padpuzzel">
+  <rect width="32" height="32" rx="9" fill="#7a9e7e"/>
+  <circle cx="16" cy="14" r="3" fill="#DDD4A0"/>
+  <circle cx="16" cy="8" r="2.5" fill="#C4D2B8"/>
+  <circle cx="22" cy="14" r="2.5" fill="#C4D2B8"/>
+  <circle cx="16" cy="20" r="2.5" fill="#C4D2B8"/>
+  <circle cx="10" cy="14" r="2.5" fill="#C4D2B8"/>
+  <circle cx="16" cy="14" r="1.5" fill="#C8BE88"/>
+</svg>
