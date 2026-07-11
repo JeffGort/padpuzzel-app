@@ -30,9 +30,18 @@ Ga naar http://localhost:8080
 node --test test_maze.js
 ```
 
-## GitHub Pages
+## GitHub Pages setup
 
-Repo root → Settings → Pages → branch `main`, folder `/ (root)`.
+1. Maak een **lege** repo op GitHub: [github.com/new](https://github.com/new) → naam `padpuzzel-app` (public, geen README)
+2. Push vanaf deze map:
+   ```powershell
+   cd padpuzzel-app
+   git push -u origin main
+   ```
+3. Repo **Settings → Pages → branch `main`, folder `/ (root)`**
+4. Live op https://jeffgort.github.io/padpuzzel-app/ (na ~1 minuut)
+
+> GitHub CLI (`gh auth login`) is optioneel — `git push` werkt met dezelfde login als `math-app`.
 
 ## Roadmap (binnenkort)
 
