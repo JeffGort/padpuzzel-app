@@ -132,12 +132,6 @@ body {
   border-radius: 8px;
   border: 1px solid rgba(0,0,0,.08);
 }
-.color-hint {
-  margin-top: .45rem;
-  font-size: .8rem;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
 .size-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -280,15 +274,7 @@ button.secondary:hover { background: #f8f6f4; }
       </select>
     </div>
 
-    <div class="field">
-      <label for="icon">Icoon</label>
-      <select id="icon">
-        <option value="flower">Bloem</option>
-        <option value="ball">Bal</option>
-        <option value="heart">Hart</option>
-        <option value="wheel">Wiel</option>
-      </select>
-    </div>
+    <!-- Icoon volgt thema (zie THEME_PACKS.defaultIcon); geen aparte keuze nodig -->
 
     <div class="field">
       <label>Grootte (rijen × kolommen)</label>
@@ -318,7 +304,6 @@ button.secondary:hover { background: #f8f6f4; }
           Blauw
         </button>
       </div>
-      <p class="color-hint" id="colorHint"></p>
     </div>
 
     <div class="btn-row">
@@ -354,25 +339,25 @@ const DIFFICULTY_PRESETS = {
   hard:   { rows: 11, cols: 12, brighten: -12 }
 };
 
-const COLOR_UI = {
-  singleColor: {
-    label: 'Welke kleur moet het kind volgen?',
-    hint: 'Kies de kleur die het kind moet volgen.'
-  },
-  avoidColor: {
-    label: 'Welke kleur mag NIET?',
-    hint: 'Kies de kleur die verboden is.'
-  }
+const COLOR_LABELS = {
+  singleColor: 'Welke kleur moet het kind volgen?',
+  avoidColor: 'Welke kleur mag NIET?'
 };
 
+/* defaultIcon: visueel icoon op het rooster (figure blijft voor instructietekst) */
 const THEME_PACKS = {
-  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder', defaultIcon: 'flower' },
-  dierentuin:  { start: 'Aap', goal: 'Bananenmand', figure: 'aap', defaultIcon: 'ball' },
-  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut', defaultIcon: 'wheel' },
-  onderwater:  { start: 'Vis', goal: 'Koraalrif', figure: 'vis', defaultIcon: 'heart' },
-  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses', defaultIcon: 'heart' },
-  seizoenen:   { start: 'Eekhoorn', goal: 'Boom', figure: 'eekhoorn', defaultIcon: 'flower' }
+  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder', defaultIcon: 'flower' },   // tuin → bloem
+  dierentuin:  { start: 'Aap', goal: 'Bananenmand', figure: 'aap', defaultIcon: 'ball' },        // speelbal in dierentuin
+  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut', defaultIcon: 'wheel' }, // planeten / wiel
+  onderwater:  { start: 'Vis', goal: 'Koraalrif', figure: 'vis', defaultIcon: 'ball' },          // luchtbel, geen hart
+  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses', defaultIcon: 'heart' },  // sprookjesliefde
+  seizoenen:   { start: 'Eekhoorn', goal: 'Boom', figure: 'eekhoorn', defaultIcon: 'wheel' }      // jaarrond / seizoenscyclus
 };
+
+function iconForTheme(themeId) {
+  const theme = THEME_PACKS[themeId];
+  return (theme && theme.defaultIcon) || 'flower';
+}
 
 const RULE_TEXT = {
   singleColor: (theme, colorName) =>
@@ -448,78 +433,88 @@ function findBranchFreePathSimple(rows, cols, startCol, goalCol, rng) {
   return path;
 }
 
+function wouldCreateBranch(path, cell) {
+  for (let i = 0; i < path.length - 1; i++) {
+    if (isOrthogonal(path[i], cell)) return true;
+  }
+  return false;
+}
+
+function straightRunLen(path) {
+  if (path.length < 2) return 0;
+  const dr = path[path.length - 1][0] - path[path.length - 2][0];
+  const dc = path[path.length - 1][1] - path[path.length - 2][1];
+  let len = 1;
+  for (let i = path.length - 2; i >= 1; i--) {
+    const dr2 = path[i][0] - path[i - 1][0];
+    const dc2 = path[i][1] - path[i - 1][1];
+    if (dr2 === dr && dc2 === dc) len++;
+    else break;
+  }
+  return len;
+}
+
+function orderNeighborsForWindiness(path, neighbors, rng) {
+  const [r, c] = path[path.length - 1];
+  let pdr = 0;
+  let pdc = 0;
+  if (path.length >= 2) {
+    pdr = r - path[path.length - 2][0];
+    pdc = c - path[path.length - 2][1];
+  }
+  const preferTurn = straightRunLen(path) >= 2;
+  const turns = [];
+  const same = [];
+  const other = [];
+  for (const [nr, nc] of neighbors) {
+    const dr = nr - r;
+    const dc = nc - c;
+    const isSame = dr === pdr && dc === pdc;
+    const isTurn = (pdr !== 0 || pdc !== 0) && !isSame;
+    if (preferTurn && isTurn) turns.push([nr, nc]);
+    else if (isSame) same.push([nr, nc]);
+    else other.push([nr, nc]);
+  }
+  return [...rng.shuffle(turns), ...rng.shuffle(other), ...rng.shuffle(same)];
+}
+
+/** DFS/backtracking: 4 richtingen incl. omhoog; geen vertakking, windend pad */
 function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
-  const path = [[0, startCol]];
-  const usedInRow = Array.from({ length: rows }, () => new Set());
-  usedInRow[0].add(startCol);
-  let c = startCol;
+  const goal = [rows - 1, goalCol];
+  const maxLen = rows * cols;
 
-  function canVisit(row, col) {
-    if (col < 0 || col >= cols) return false;
-    if (usedInRow[row].has(col)) return false;
-    if (row > 0 && usedInRow[row - 1].has(col)) return false;
-    return true;
-  }
-
-  function step(row, col) {
-    path.push([row, col]);
-    usedInRow[row].add(col);
-    c = col;
-  }
-
-  function wanderRow(row, dirs, maxSteps) {
-    for (const dir of dirs) {
-      for (let i = 0; i < maxSteps; i++) {
-        const nc = c + dir;
-        if (!canVisit(row, nc)) break;
-        step(row, nc);
-      }
+  function search(path, visited) {
+    const [r, c] = path[path.length - 1];
+    if (r === goal[0] && c === goal[1]) {
+      return path.length >= rows ? path.slice() : null;
     }
-  }
+    if (path.length >= maxLen) return null;
 
-  const topTargets = [];
-  for (let tc = 0; tc < cols; tc++) {
-    if (tc !== startCol) topTargets.push(tc);
-  }
-  const topTarget = topTargets.length ? rng.choice(topTargets) : startCol;
-  while (c !== topTarget) step(0, c < topTarget ? c + 1 : c - 1);
+    let candidates = neighbors4(r, c, rows, cols).filter(([nr, nc]) => {
+      if (visited.has(cellKey(nr, nc))) return false;
+      if (wouldCreateBranch(path, [nr, nc])) return false;
+      if (nr === rows - 1 && nc !== goalCol) return false;
+      return true;
+    });
+    candidates = orderNeighborsForWindiness(path, candidates, rng);
 
-  if (rows === 2) {
-    while (c !== goalCol) step(0, c < goalCol ? c + 1 : c - 1);
-    step(1, goalCol);
-    return path;
-  }
-
-  const windiness = Math.max(2, Math.floor(cols * (0.35 + rng.next() * 0.35)));
-
-  for (let row = 1; row < rows - 1; row++) {
-    step(row, c);
-
-    if (row === rows - 2) {
-      while (c !== goalCol) {
-        const nc = c < goalCol ? c + 1 : c - 1;
-        if (!canVisit(row, nc)) return null;
-        step(row, nc);
-      }
-      continue;
+    for (const [nr, nc] of candidates) {
+      const key = cellKey(nr, nc);
+      visited.add(key);
+      path.push([nr, nc]);
+      const found = search(path, visited);
+      if (found) return found;
+      path.pop();
+      visited.delete(key);
     }
-
-    const towardGoal = row >= rows - 3;
-    const dirs = towardGoal
-      ? (c < goalCol ? [1, -1] : c > goalCol ? [-1, 1] : (rng.int(2) === 0 ? [-1, 1] : [1, -1]))
-      : (rng.int(2) === 0 ? [-1, 1] : [1, -1]);
-    wanderRow(row, dirs, rng.int(windiness) + 1);
-    if (!towardGoal && rng.next() < 0.55) {
-      wanderRow(row, dirs.map(d => -d), rng.int(windiness) + 1);
-    }
+    return null;
   }
 
-  step(rows - 1, goalCol);
-  return path;
+  return search([[0, startCol]], new Set([cellKey(0, startCol)]));
 }
 
 function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 24; attempt++) {
     const path = findBranchFreePathWindy(rows, cols, startCol, goalCol, rng);
     if (path && path.length >= rows) return path;
   }
@@ -623,9 +618,8 @@ function setChosenColorKey(key) {
 }
 
 function updateColorFieldUi(ruleId) {
-  const ui = COLOR_UI[ruleId] || COLOR_UI.singleColor;
-  document.getElementById('colorFieldLabel').textContent = ui.label;
-  document.getElementById('colorHint').textContent = ui.hint;
+  document.getElementById('colorFieldLabel').textContent =
+    COLOR_LABELS[ruleId] || COLOR_LABELS.singleColor;
 }
 
 function buildColorConfig(ruleId, chosenKey, brightenAmount) {
@@ -745,34 +739,34 @@ function drawFlower(g, cx, cy, s, light, dark) {
 }
 
 function drawBall(g, cx, cy, s, light, dark) {
-  g.appendChild(el('circle', { cx, cy, r: s * 0.45, fill: light }));
-  g.appendChild(el('circle', { cx: cx - s * 0.12, cy: cy - s * 0.12, r: s * 0.12, fill: '#fff', opacity: '0.55' }));
-  g.appendChild(el('circle', { cx, cy, r: s * 0.18, fill: dark }));
+  g.appendChild(el('circle', { cx, cy, r: s * 0.52, fill: light }));
+  g.appendChild(el('circle', { cx: cx - s * 0.14, cy: cy - s * 0.14, r: s * 0.14, fill: '#fff', opacity: '0.55' }));
+  g.appendChild(el('circle', { cx, cy, r: s * 0.2, fill: dark }));
 }
 
 function drawHeart(g, cx, cy, s, light, dark) {
   const path = el('path', {
-    d: `M ${cx} ${cy + s * 0.35}
-        C ${cx - s * 0.5} ${cy - s * 0.05}, ${cx - s * 0.45} ${cy - s * 0.45}, ${cx} ${cy - s * 0.15}
-        C ${cx + s * 0.45} ${cy - s * 0.45}, ${cx + s * 0.5} ${cy - s * 0.05}, ${cx} ${cy + s * 0.35} Z`,
+    d: `M ${cx} ${cy + s * 0.42}
+        C ${cx - s * 0.58} ${cy - s * 0.02}, ${cx - s * 0.52} ${cy - s * 0.52}, ${cx} ${cy - s * 0.18}
+        C ${cx + s * 0.52} ${cy - s * 0.52}, ${cx + s * 0.58} ${cy - s * 0.02}, ${cx} ${cy + s * 0.42} Z`,
     fill: light
   });
   g.appendChild(path);
-  g.appendChild(el('circle', { cx, cy: cy + s * 0.05, r: s * 0.1, fill: dark }));
+  g.appendChild(el('circle', { cx, cy: cy + s * 0.06, r: s * 0.12, fill: dark }));
 }
 
 function drawWheel(g, cx, cy, s, light, dark) {
-  g.appendChild(el('circle', { cx, cy, r: s * 0.45, fill: light }));
+  g.appendChild(el('circle', { cx, cy, r: s * 0.52, fill: light }));
   for (let i = 0; i < 4; i++) {
     const a = (i * Math.PI) / 2;
     g.appendChild(el('line', {
       x1: cx, y1: cy,
-      x2: cx + Math.cos(a) * s * 0.4,
-      y2: cy + Math.sin(a) * s * 0.4,
-      stroke: dark, 'stroke-width': s * 0.08, 'stroke-linecap': 'round'
+      x2: cx + Math.cos(a) * s * 0.46,
+      y2: cy + Math.sin(a) * s * 0.46,
+      stroke: dark, 'stroke-width': s * 0.09, 'stroke-linecap': 'round'
     }));
   }
-  g.appendChild(el('circle', { cx, cy, r: s * 0.15, fill: dark }));
+  g.appendChild(el('circle', { cx, cy, r: s * 0.17, fill: dark }));
 }
 
 const ICON_DRAWERS = { flower: drawFlower, ball: drawBall, heart: drawHeart, wheel: drawWheel };
@@ -800,7 +794,7 @@ function drawGrid(puzzle, config) {
   svg.appendChild(g);
 
   const drawer = ICON_DRAWERS[icon] || drawFlower;
-  const s = cellSize * 0.42;
+  const s = cellSize * (icon === 'flower' ? 0.42 : 0.55);
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -837,7 +831,7 @@ function readConfig() {
     cols: parseInt(document.getElementById('cols').value, 10),
     ruleId,
     themeId: document.getElementById('theme').value,
-    icon: document.getElementById('icon').value,
+    icon: iconForTheme(document.getElementById('theme').value),
     seed: currentSeed,
     ...colors
   };
@@ -978,15 +972,9 @@ function init() {
     });
   });
 
-  document.getElementById('theme').addEventListener('change', () => {
-    const theme = THEME_PACKS[document.getElementById('theme').value];
-    if (theme && theme.defaultIcon) {
-      document.getElementById('icon').value = theme.defaultIcon;
-    }
-    scheduleRegenerate();
-  });
+  document.getElementById('theme').addEventListener('change', scheduleRegenerate);
 
-  ['rows', 'cols', 'icon'].forEach(id => {
+  ['rows', 'cols'].forEach(id => {
     document.getElementById(id).addEventListener('change', scheduleRegenerate);
     document.getElementById(id).addEventListener('input', scheduleRegenerate);
   });
