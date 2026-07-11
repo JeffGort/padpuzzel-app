@@ -266,11 +266,9 @@ button.secondary:hover { background: #f8f6f4; }
       <label for="theme">Thema</label>
       <select id="theme">
         <option value="bloementuin">Bloementuin</option>
-        <option value="dierentuin">Dierentuin</option>
+        <option value="speeltuin">Speeltuin</option>
         <option value="ruimte">Ruimte</option>
-        <option value="onderwater">Onder water</option>
         <option value="sprookje">Sprookje</option>
-        <option value="seizoenen">Seizoenen</option>
       </select>
     </div>
 
@@ -344,14 +342,12 @@ const COLOR_LABELS = {
   avoidColor: 'Welke kleur mag NIET?'
 };
 
-/* defaultIcon: visueel icoon op het rooster (figure blijft voor instructietekst) */
+/* Elk thema heeft precies één icoon (1:1); figure voor instructietekst */
 const THEME_PACKS = {
-  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder', defaultIcon: 'flower' },   // tuin → bloem
-  dierentuin:  { start: 'Aap', goal: 'Bananenmand', figure: 'aap', defaultIcon: 'ball' },        // speelbal in dierentuin
-  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut', defaultIcon: 'wheel' }, // planeten / wiel
-  onderwater:  { start: 'Vis', goal: 'Koraalrif', figure: 'vis', defaultIcon: 'ball' },          // luchtbel, geen hart
-  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses', defaultIcon: 'heart' },  // sprookjesliefde
-  seizoenen:   { start: 'Eekhoorn', goal: 'Boom', figure: 'eekhoorn', defaultIcon: 'wheel' }      // jaarrond / seizoenscyclus
+  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder', defaultIcon: 'flower' },
+  speeltuin:   { start: 'Kind', goal: 'Glijbaan', figure: 'kind', defaultIcon: 'ball' },
+  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut', defaultIcon: 'wheel' },
+  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses', defaultIcon: 'heart' }
 };
 
 function iconForTheme(themeId) {
@@ -359,9 +355,11 @@ function iconForTheme(themeId) {
   return (theme && theme.defaultIcon) || 'flower';
 }
 
+const CELL_WORD = { vlinder: 'bloemen' };
+
 const RULE_TEXT = {
   singleColor: (theme, colorName) =>
-    `Help de ${theme.figure} van boven naar beneden. Loop alleen over ${colorName} ${theme.figure === 'vlinder' ? 'bloemen' : 'vakjes'}.`,
+    `Help de ${theme.figure} van boven naar beneden. Loop alleen over ${colorName} ${CELL_WORD[theme.figure] || 'vakjes'}.`,
   avoidColor: (theme, colorName) =>
     `Help de ${theme.figure} van boven naar beneden. Je mag overal staan, behalve op ${colorName} vakjes.`
 };
@@ -478,39 +476,70 @@ function orderNeighborsForWindiness(path, neighbors, rng) {
   return [...rng.shuffle(turns), ...rng.shuffle(other), ...rng.shuffle(same)];
 }
 
-/** DFS/backtracking: 4 richtingen incl. omhoog; geen vertakking, windend pad */
+/** Random worm with backtracking: 4 richtingen incl. omhoog; geen vertakking, windend pad */
 function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
   const goal = [rows - 1, goalCol];
-  const maxLen = rows * cols;
+  const maxTotal = rows * cols * 2;
 
-  function search(path, visited) {
-    const [r, c] = path[path.length - 1];
-    if (r === goal[0] && c === goal[1]) {
-      return path.length >= rows ? path.slice() : null;
-    }
-    if (path.length >= maxLen) return null;
+  function tryWalk() {
+    const path = [[0, startCol]];
+    const visited = new Set([cellKey(0, startCol)]);
+    let dir = null;
+    let stepsInDir = 0;
+    let maxStepsInDir = 0;
+    let steps = 0;
 
-    let candidates = neighbors4(r, c, rows, cols).filter(([nr, nc]) => {
-      if (visited.has(cellKey(nr, nc))) return false;
-      if (wouldCreateBranch(path, [nr, nc])) return false;
-      if (nr === rows - 1 && nc !== goalCol) return false;
-      return true;
-    });
-    candidates = orderNeighborsForWindiness(path, candidates, rng);
+    while (steps++ < maxTotal) {
+      const [r, c] = path[path.length - 1];
+      if (r === goal[0] && c === goal[1] && path.length >= rows) return path;
 
-    for (const [nr, nc] of candidates) {
-      const key = cellKey(nr, nc);
-      visited.add(key);
-      path.push([nr, nc]);
-      const found = search(path, visited);
-      if (found) return found;
-      path.pop();
-      visited.delete(key);
+      if (dir === null || stepsInDir >= maxStepsInDir) {
+        maxStepsInDir = rng.int(3) + 2;
+        stepsInDir = 0;
+        dir = null;
+      }
+
+      let candidates = neighbors4(r, c, rows, cols).filter(([nr, nc]) => {
+        if (visited.has(cellKey(nr, nc))) return false;
+        if (wouldCreateBranch(path, [nr, nc])) return false;
+        if (nr === rows - 1 && nc !== goalCol) return false;
+        return true;
+      });
+
+      if (!candidates.length) {
+        if (path.length <= 1) return null;
+        const removed = path.pop();
+        visited.delete(cellKey(...removed));
+        dir = null;
+        stepsInDir = 0;
+        continue;
+      }
+
+      let pick;
+      if (dir !== null) {
+        const [dr, dc] = dir;
+        const cont = candidates.find(([nr, nc]) => nr - r === dr && nc - c === dc);
+        pick = cont && stepsInDir < maxStepsInDir
+          ? cont
+          : orderNeighborsForWindiness(path, candidates, rng)[0];
+      } else {
+        const ordered = orderNeighborsForWindiness(path, candidates, rng);
+        pick = ordered[rng.int(Math.min(3, ordered.length))];
+      }
+
+      dir = [pick[0] - r, pick[1] - c];
+      stepsInDir++;
+      path.push(pick);
+      visited.add(cellKey(...pick));
     }
     return null;
   }
 
-  return search([[0, startCol]], new Set([cellKey(0, startCol)]));
+  for (let i = 0; i < 80; i++) {
+    const result = tryWalk();
+    if (result) return result;
+  }
+  return null;
 }
 
 function findBranchFreePath(rows, cols, startCol, goalCol, rng) {

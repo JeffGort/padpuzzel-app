@@ -19,8 +19,7 @@ Ga naar http://localhost:8080
 
 - Leeftijd: Makkelijk / Middel / Moeilijk
 - Regels: één kleur volgen, vermijd één kleur
-- Thema's: bloementuin, dierentuin, ruimte, onder water, sprookje, seizoenen
-- Iconen: bloem, bal, hart, wiel
+- Thema's (1 icoon per thema): bloementuin (bloem), speeltuin (bal), ruimte (wiel), sprookje (hart)
 - Download PNG, PDF, print
 - DFS-padgeneratie (geen vertakkingen)
 

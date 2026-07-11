@@ -85,78 +85,118 @@ function findBranchFreePathSimple(rows, cols, startCol, goalCol, rng) {
   return path;
 }
 
+function wouldCreateBranch(path, cell) {
+  for (let i = 0; i < path.length - 1; i++) {
+    if (isOrthogonal(path[i], cell)) return true;
+  }
+  return false;
+}
+
+function straightRunLen(path) {
+  if (path.length < 2) return 0;
+  const dr = path[path.length - 1][0] - path[path.length - 2][0];
+  const dc = path[path.length - 1][1] - path[path.length - 2][1];
+  let len = 1;
+  for (let i = path.length - 2; i >= 1; i--) {
+    const dr2 = path[i][0] - path[i - 1][0];
+    const dc2 = path[i][1] - path[i - 1][1];
+    if (dr2 === dr && dc2 === dc) len++;
+    else break;
+  }
+  return len;
+}
+
+function orderNeighborsForWindiness(path, neighbors, rng) {
+  const [r, c] = path[path.length - 1];
+  let pdr = 0;
+  let pdc = 0;
+  if (path.length >= 2) {
+    pdr = r - path[path.length - 2][0];
+    pdc = c - path[path.length - 2][1];
+  }
+  const preferTurn = straightRunLen(path) >= 2;
+  const turns = [];
+  const same = [];
+  const other = [];
+  for (const [nr, nc] of neighbors) {
+    const dr = nr - r;
+    const dc = nc - c;
+    const isSame = dr === pdr && dc === pdc;
+    const isTurn = (pdr !== 0 || pdc !== 0) && !isSame;
+    if (preferTurn && isTurn) turns.push([nr, nc]);
+    else if (isSame) same.push([nr, nc]);
+    else other.push([nr, nc]);
+  }
+  return [...rng.shuffle(turns), ...rng.shuffle(other), ...rng.shuffle(same)];
+}
+
 function findBranchFreePathWindy(rows, cols, startCol, goalCol, rng) {
-  const path = [[0, startCol]];
-  const usedInRow = Array.from({ length: rows }, () => new Set());
-  usedInRow[0].add(startCol);
-  let c = startCol;
+  const goal = [rows - 1, goalCol];
+  const maxTotal = rows * cols * 2;
 
-  function canVisit(row, col) {
-    if (col < 0 || col >= cols) return false;
-    if (usedInRow[row].has(col)) return false;
-    if (row > 0 && usedInRow[row - 1].has(col)) return false;
-    return true;
-  }
+  function tryWalk() {
+    const path = [[0, startCol]];
+    const visited = new Set([cellKey(0, startCol)]);
+    let dir = null;
+    let stepsInDir = 0;
+    let maxStepsInDir = 0;
+    let steps = 0;
 
-  function step(row, col) {
-    path.push([row, col]);
-    usedInRow[row].add(col);
-    c = col;
-  }
+    while (steps++ < maxTotal) {
+      const [r, c] = path[path.length - 1];
+      if (r === goal[0] && c === goal[1] && path.length >= rows) return path;
 
-  function wanderRow(row, dirs, maxSteps) {
-    for (const dir of dirs) {
-      for (let i = 0; i < maxSteps; i++) {
-        const nc = c + dir;
-        if (!canVisit(row, nc)) break;
-        step(row, nc);
+      if (dir === null || stepsInDir >= maxStepsInDir) {
+        maxStepsInDir = rng.int(3) + 2;
+        stepsInDir = 0;
+        dir = null;
       }
-    }
-  }
 
-  const topTargets = [];
-  for (let tc = 0; tc < cols; tc++) {
-    if (tc !== startCol) topTargets.push(tc);
-  }
-  const topTarget = topTargets.length ? rng.choice(topTargets) : startCol;
-  while (c !== topTarget) step(0, c < topTarget ? c + 1 : c - 1);
+      let candidates = neighbors4(r, c, rows, cols).filter(([nr, nc]) => {
+        if (visited.has(cellKey(nr, nc))) return false;
+        if (wouldCreateBranch(path, [nr, nc])) return false;
+        if (nr === rows - 1 && nc !== goalCol) return false;
+        return true;
+      });
 
-  if (rows === 2) {
-    while (c !== goalCol) step(0, c < goalCol ? c + 1 : c - 1);
-    step(1, goalCol);
-    return path;
-  }
-
-  const windiness = Math.max(2, Math.floor(cols * (0.35 + rng.next() * 0.35)));
-
-  for (let row = 1; row < rows - 1; row++) {
-    step(row, c);
-
-    if (row === rows - 2) {
-      while (c !== goalCol) {
-        const nc = c < goalCol ? c + 1 : c - 1;
-        if (!canVisit(row, nc)) return null;
-        step(row, nc);
+      if (!candidates.length) {
+        if (path.length <= 1) return null;
+        const removed = path.pop();
+        visited.delete(cellKey(...removed));
+        dir = null;
+        stepsInDir = 0;
+        continue;
       }
-      continue;
-    }
 
-    const towardGoal = row >= rows - 3;
-    const dirs = towardGoal
-      ? (c < goalCol ? [1, -1] : c > goalCol ? [-1, 1] : (rng.int(2) === 0 ? [-1, 1] : [1, -1]))
-      : (rng.int(2) === 0 ? [-1, 1] : [1, -1]);
-    wanderRow(row, dirs, rng.int(windiness) + 1);
-    if (!towardGoal && rng.next() < 0.55) {
-      wanderRow(row, dirs.map(d => -d), rng.int(windiness) + 1);
+      let pick;
+      if (dir !== null) {
+        const [dr, dc] = dir;
+        const cont = candidates.find(([nr, nc]) => nr - r === dr && nc - c === dc);
+        pick = cont && stepsInDir < maxStepsInDir
+          ? cont
+          : orderNeighborsForWindiness(path, candidates, rng)[0];
+      } else {
+        const ordered = orderNeighborsForWindiness(path, candidates, rng);
+        pick = ordered[rng.int(Math.min(3, ordered.length))];
+      }
+
+      dir = [pick[0] - r, pick[1] - c];
+      stepsInDir++;
+      path.push(pick);
+      visited.add(cellKey(...pick));
     }
+    return null;
   }
 
-  step(rows - 1, goalCol);
-  return path;
+  for (let i = 0; i < 80; i++) {
+    const result = tryWalk();
+    if (result) return result;
+  }
+  return null;
 }
 
 function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 24; attempt++) {
     const path = findBranchFreePathWindy(rows, cols, startCol, goalCol, rng);
     if (path && path.length >= rows) return path;
   }
