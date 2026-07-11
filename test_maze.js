@@ -39,44 +39,43 @@ function neighbors4(r, c, rows, cols) {
   return n;
 }
 
-function dfsPath(rows, cols, rng) {
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const startCol = rng.int(cols);
-    const goalCol = rng.int(cols);
-    const startK = cellKey(0, startCol);
-    const goalK = cellKey(rows - 1, goalCol);
-    const stack = [[0, startCol]];
-    const parent = new Map([[startK, null]]);
-    const visited = new Set([startK]);
+function findBranchFreePath(rows, cols, startCol, goalCol, rng) {
+  const path = [[0, startCol]];
+  let c = startCol;
 
-    while (stack.length) {
-      const [r, c] = stack[stack.length - 1];
-      if (cellKey(r, c) === goalK) {
-        const path = [];
-        let cur = cellKey(r, c);
-        while (cur) {
-          const [rr, cc] = cur.split(',').map(Number);
-          path.unshift([rr, cc]);
-          cur = parent.get(cur);
-        }
-        return path;
-      }
-      const nbrs = rng.shuffle(neighbors4(r, c, rows, cols));
-      let extended = false;
-      for (const [nr, nc] of nbrs) {
-        const nk = cellKey(nr, nc);
-        if (!visited.has(nk)) {
-          visited.add(nk);
-          parent.set(nk, cellKey(r, c));
-          stack.push([nr, nc]);
-          extended = true;
-          break;
-        }
-      }
-      if (!extended) stack.pop();
-    }
+  const topVia = rng.int(2) === 0 ? goalCol : rng.int(cols);
+  while (c !== topVia) {
+    c += c < topVia ? 1 : -1;
+    path.push([0, c]);
   }
-  return null;
+
+  if (rows === 2) {
+    while (c !== goalCol) {
+      c += c < goalCol ? 1 : -1;
+      path.push([0, c]);
+    }
+    path.push([rows - 1, goalCol]);
+    return path;
+  }
+
+  for (let r = 1; r < rows - 1; r++) {
+    path.push([r, topVia]);
+  }
+
+  c = topVia;
+  const lastRow = rows - 2;
+  while (c !== goalCol) {
+    c += c < goalCol ? 1 : -1;
+    path.push([lastRow, c]);
+  }
+  path.push([rows - 1, goalCol]);
+  return path;
+}
+
+function dfsPath(rows, cols, rng) {
+  const startCol = rng.int(cols);
+  const goalCol = rng.int(cols);
+  return findBranchFreePath(rows, cols, startCol, goalCol, rng);
 }
 
 function colorPair(light, dark) { return { light, dark }; }
@@ -111,13 +110,14 @@ function fillGridAvoid(path, rows, cols, rng, trail, distractors, avoid) {
 }
 
 function generatePuzzle(rows, cols, seed, ruleId, trail, distractors, avoid) {
-  const rng = makeRng(seed);
+  const fillRng = makeRng(seed);
   for (let i = 0; i < 100; i++) {
-    const path = dfsPath(rows, cols, rng);
+    const pathRng = makeRng((seed ^ Math.imul(i + 1, 0x9E3779B9)) >>> 0);
+    const path = dfsPath(rows, cols, pathRng);
     if (!path) continue;
     const grid = ruleId === 'avoidColor'
-      ? fillGridAvoid(path, rows, cols, rng, trail, distractors, avoid)
-      : fillGridSingle(path, rows, cols, rng, trail, distractors);
+      ? fillGridAvoid(path, rows, cols, fillRng, trail, distractors, avoid)
+      : fillGridSingle(path, rows, cols, fillRng, trail, distractors);
     const puzzle = { grid, path, avoid };
     const err = validatePuzzle(puzzle, rows, cols, ruleId);
     if (!err) return puzzle;
