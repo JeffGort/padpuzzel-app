@@ -17,11 +17,16 @@
   --shadow: rgba(0,0,0,.08);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
 body {
   font-family: "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
 }
 .app {
   display: grid;
@@ -30,10 +35,18 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 1.25rem;
-  min-height: 100vh;
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 @media (max-width: 800px) {
-  .app { grid-template-columns: 1fr; }
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
 }
 .panel {
   background: var(--panel);
@@ -41,7 +54,25 @@ body {
   border-radius: 14px;
   padding: 1.25rem;
   box-shadow: 0 2px 12px var(--shadow);
-  height: fit-content;
+  overflow-y: auto;
+  max-height: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 800px) {
+  .panel {
+    padding: 0.75rem 1rem;
+    max-height: 42vh;
+  }
+  .panel h1 { font-size: 1.15rem; }
+  .panel .subtitle { margin-bottom: 0.5rem; }
+  .field { margin-bottom: 0.55rem; }
+  .btn-row { margin-top: 0.5rem; }
+  .instruction-box { margin-top: 0.5rem; }
+}
+@media (max-width: 480px) {
+  .app { padding: 0.35rem; gap: 0.35rem; }
+  .panel { max-height: 38vh; padding: 0.6rem 0.75rem; }
+  button { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
 }
 .panel h1 {
   font-size: 1.35rem;
@@ -125,6 +156,9 @@ button.secondary:hover { background: #f8f6f4; }
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 .preview-card {
   background: var(--panel);
@@ -136,6 +170,9 @@ button.secondary:hover { background: #f8f6f4; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .preview-instruction {
   font-size: 1.05rem;
@@ -143,10 +180,36 @@ button.secondary:hover { background: #f8f6f4; }
   margin-bottom: 1rem;
   max-width: 520px;
   line-height: 1.45;
+  flex-shrink: 0;
+}
+#svgHost {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
 }
 #puzzleSvg {
   max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
+}
+@media (max-width: 800px) {
+  .preview-wrap { gap: 0; }
+  .preview-card { padding: 0.75rem; }
+  .preview-instruction {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+}
+@media (max-width: 480px) {
+  .preview-instruction {
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
 }
 .theme-labels {
   display: flex;
@@ -160,11 +223,14 @@ button.secondary:hover { background: #f8f6f4; }
 .hidden { display: none !important; }
 
 @media print {
+  html, body { height: auto; overflow: visible; }
   body { background: #fff; }
   .panel, .btn-row, .theme-labels, .no-print { display: none !important; }
-  .app { display: block; padding: 0; max-width: none; }
+  .app { display: block; padding: 0; max-width: none; height: auto; max-height: none; overflow: visible; }
+  .preview-wrap, .preview-card, #svgHost { height: auto; overflow: visible; }
   .preview-card { border: none; box-shadow: none; padding: 0; }
   .preview-instruction { font-size: 14pt; margin-bottom: 8mm; }
+  #puzzleSvg { max-height: none; }
 }
 </style>
 </head>
@@ -297,12 +363,12 @@ const DIFFICULTY_PRESETS = {
 };
 
 const THEME_PACKS = {
-  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder' },
-  dierentuin:  { start: 'Aap', goal: 'Bananenmand', figure: 'aap' },
-  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut' },
-  onderwater:  { start: 'Vis', goal: 'Koraalrif', figure: 'vis' },
-  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses' },
-  seizoenen:   { start: 'Eekhoorn', goal: 'Boom', figure: 'eekhoorn' }
+  bloementuin: { start: 'Vlinder', goal: 'Bloem', figure: 'vlinder', defaultIcon: 'flower' },
+  dierentuin:  { start: 'Aap', goal: 'Bananenmand', figure: 'aap', defaultIcon: 'ball' },
+  ruimte:      { start: 'Astronaut', goal: 'Raket', figure: 'astronaut', defaultIcon: 'wheel' },
+  onderwater:  { start: 'Vis', goal: 'Koraalrif', figure: 'vis', defaultIcon: 'heart' },
+  sprookje:    { start: 'Prinses', goal: 'Kasteel', figure: 'prinses', defaultIcon: 'heart' },
+  seizoenen:   { start: 'Eekhoorn', goal: 'Boom', figure: 'eekhoorn', defaultIcon: 'flower' }
 };
 
 const RULE_TEXT = {
@@ -826,7 +892,15 @@ function init() {
     scheduleRegenerate();
   });
 
-  ['rows', 'cols', 'theme', 'icon'].forEach(id => {
+  document.getElementById('theme').addEventListener('change', () => {
+    const theme = THEME_PACKS[document.getElementById('theme').value];
+    if (theme && theme.defaultIcon) {
+      document.getElementById('icon').value = theme.defaultIcon;
+    }
+    scheduleRegenerate();
+  });
+
+  ['rows', 'cols', 'icon'].forEach(id => {
     document.getElementById(id).addEventListener('change', scheduleRegenerate);
     document.getElementById(id).addEventListener('input', scheduleRegenerate);
   });
